@@ -47,20 +47,29 @@ class MongoRestore:
         self.location = location
         self.minio_ssl = minio_ssl
         self.prefix = prefix
-        self.clean_zip_name = zip_name[1:].strip() if zip_name[0] is "_" else zip_name.strip()
         self.zip_name = zip_name.strip()
     # End __init__()
 
     def create_folder(self) -> None:
         path = os.getcwd()
-        path = path + slash_type + self.clean_zip_name
+        path = path + slash_type + self.zip_name
         self.backup_folder_path = path
         try:
-            f = open(self.clean_zip_name, 'x')
+            f = open(self.zip_name, 'x')
             f.close()
         except Exception:
             pass
     # End create_folder()
+
+    def has_prefix(self, filename: str, database_name: str) -> bool:
+        if filename.find(database_name) is 0:
+            return False
+        return True
+    # End has_prefix
+
+    def remove_prefix(self, folder_path: str, database_name: str) -> str:
+        return os.getcwd() + slash_type + folder_path[folder_path.find(database_name):]
+
 
     def restore_from_minio(self):
         minioClient = Minio(self.minio_endpoint.strip(),
@@ -72,9 +81,10 @@ class MongoRestore:
             self.create_folder() 
             minioClient.fget_object(self.minio_bucket, self.zip_name, self.backup_folder_path)
             
-            with ZipFile(self.clean_zip_name, 'r') as zipObj:
+            with ZipFile(self.zip_name, 'r') as zipObj:
                 zipObj.extractall()
-            
+            if self.has_prefix(self.zip_name, self.database_name):
+                self.backup_folder_path = self.remove_prefix(self.zip_name, self.database_name) 
             os.chdir(self.backup_folder_path[:-4])
             use_ssl = ['mongorestore',
                 '-d', '%s' % self.database_name,
